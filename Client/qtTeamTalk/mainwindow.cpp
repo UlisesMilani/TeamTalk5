@@ -3572,7 +3572,18 @@ void MainWindow::updateAudioConfig()
     else
     {
         AudioPreprocessor preprocessor;
-        if (denoise || agc || echocancel)
+        int preprocessortype = ttSettings->value(SETTINGS_SOUND_PREPROCESSOR,
+                                                 SETTINGS_SOUND_PREPROCESSOR_DEFAULT).toInt();
+        if (preprocessortype == SPEEXDSP_AUDIOPREPROCESSOR)
+        {
+            preprocessor = initDefaultAudioPreprocessor(SPEEXDSP_AUDIOPREPROCESSOR);
+            preprocessor.speexdsp.bEnableDenoise = denoise;
+            // Fixed at -60 dB per user choice after comparing samples by ear
+            preprocessor.speexdsp.nMaxNoiseSuppressDB = -60;
+            preprocessor.speexdsp.bEnableAGC = agc;
+            preprocessor.speexdsp.bEnableEchoCancellation = echocancel && duplex;
+        }
+        else if (preprocessortype == WEBRTC_AUDIOPREPROCESSOR && (denoise || agc || echocancel))
         {
             preprocessor = initDefaultAudioPreprocessor(WEBRTC_AUDIOPREPROCESSOR);
             preprocessor.webrtc.noisesuppression.bEnable = denoise;

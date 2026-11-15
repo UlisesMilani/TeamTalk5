@@ -295,7 +295,20 @@ void PreferencesDlg::initDevices()
     ui.agcBox->setChecked(ttSettings->value(SETTINGS_SOUND_AGC, SETTINGS_SOUND_AGC_DEFAULT).toBool());
     ui.denoisingBox->setChecked(ttSettings->value(SETTINGS_SOUND_DENOISING,
                                                   SETTINGS_SOUND_DENOISING_DEFAULT).toBool());
+    if (ui.preprocessorBox->count() == 0)
+    {
+        ui.preprocessorBox->addItem(tr("WebRTC (default)"), WEBRTC_AUDIOPREPROCESSOR);
+        ui.preprocessorBox->addItem(tr("Speex DSP"), SPEEXDSP_AUDIOPREPROCESSOR);
+        ui.preprocessorBox->addItem(tr("Disabled"), TEAMTALK_AUDIOPREPROCESSOR);
+        connect(ui.preprocessorBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                this, &PreferencesDlg::slotPreprocessorChanged);
+    }
+    int preproctype = ttSettings->value(SETTINGS_SOUND_PREPROCESSOR,
+                                        SETTINGS_SOUND_PREPROCESSOR_DEFAULT).toInt();
+    int preprocindex = ui.preprocessorBox->findData(preproctype);
+    ui.preprocessorBox->setCurrentIndex(preprocindex >= 0 ? preprocindex : 0);
     slotUpdateSoundCheckBoxes();
+    slotPreprocessorChanged();
 }
 
 SoundSystem PreferencesDlg::getSoundSystem()
@@ -408,8 +421,20 @@ void PreferencesDlg::slotUpdateSoundCheckBoxes()
     getSoundDevice(outputid, m_sounddevices, out_dev);
 
     bool echocapable = isSoundDeviceEchoCapable(in_dev, out_dev);
-    ui.echocancelBox->setEnabled(echocapable);
+    int preproctype = getCurrentItemData(ui.preprocessorBox, WEBRTC_AUDIOPREPROCESSOR).toInt();
+    ui.echocancelBox->setEnabled(echocapable && preproctype != TEAMTALK_AUDIOPREPROCESSOR);
     ui.echocancelBox->setChecked(ui.echocancelBox->isEnabled() && ui.echocancelBox->isChecked());
+}
+
+void PreferencesDlg::slotPreprocessorChanged()
+{
+    int preproctype = getCurrentItemData(ui.preprocessorBox, WEBRTC_AUDIOPREPROCESSOR).toInt();
+    bool disabled = preproctype == TEAMTALK_AUDIOPREPROCESSOR;
+    ui.agcBox->setEnabled(!disabled);
+    ui.denoisingBox->setEnabled(!disabled);
+    slotUpdateSoundCheckBoxes();
+    if (disabled)
+        ui.echocancelBox->setEnabled(false);
 }
 
 bool PreferencesDlg::getSoundFile(QString& filename)
@@ -963,6 +988,9 @@ void PreferencesDlg::slotSaveChanges()
         ttSettings->setValueOrClear(SETTINGS_SOUND_ECHOCANCEL, ui.echocancelBox->isChecked(), SETTINGS_SOUND_ECHOCANCEL_DEFAULT);
         ttSettings->setValueOrClear(SETTINGS_SOUND_AGC, ui.agcBox->isChecked(), SETTINGS_SOUND_AGC_DEFAULT);
         ttSettings->setValueOrClear(SETTINGS_SOUND_DENOISING, ui.denoisingBox->isChecked(), SETTINGS_SOUND_DENOISING_DEFAULT);
+        ttSettings->setValueOrClear(SETTINGS_SOUND_PREPROCESSOR,
+                                    getCurrentItemData(ui.preprocessorBox, SETTINGS_SOUND_PREPROCESSOR_DEFAULT).toInt(),
+                                    SETTINGS_SOUND_PREPROCESSOR_DEFAULT);
 
         ttSettings->setValueOrClear(SETTINGS_SOUND_MEDIASTREAM_VOLUME, ui.mediavsvoiceSlider->value(), SETTINGS_SOUND_MEDIASTREAM_VOLUME_DEFAULT);
 
@@ -1363,6 +1391,8 @@ void PreferencesDlg::slotSoundDefaults()
     ui.echocancelBox->setChecked(DEFAULT_ECHO_ENABLE && echocapable);
     ui.agcBox->setChecked(DEFAULT_AGC_ENABLE);
     ui.denoisingBox->setChecked(DEFAULT_DENOISE_ENABLE);
+    ui.preprocessorBox->setCurrentIndex(ui.preprocessorBox->findData(SETTINGS_SOUND_PREPROCESSOR_DEFAULT));
+    slotPreprocessorChanged();
     ui.mediavsvoiceSlider->setValue(SETTINGS_SOUND_MEDIASTREAM_VOLUME_DEFAULT);
 }
 

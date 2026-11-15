@@ -91,6 +91,7 @@ private:
     void slotSoundTestDevices(bool checked);
     void slotSoundDefaults();
     void slotUpdateSoundCheckBoxes();
+    void slotPreprocessorChanged();
     SoundDevice& m_devin, &m_devout;
     TTSoundLoop* m_sndloop;
 

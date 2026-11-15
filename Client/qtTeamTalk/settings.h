@@ -260,6 +260,8 @@
 #define SETTINGS_SOUND_AGC_DEFAULT                  DEFAULT_AGC_ENABLE
 #define SETTINGS_SOUND_DENOISING                    "soundsystem/denoising"
 #define SETTINGS_SOUND_DENOISING_DEFAULT            DEFAULT_DENOISE_ENABLE
+#define SETTINGS_SOUND_PREPROCESSOR                 "soundsystem/preprocessor"
+#define SETTINGS_SOUND_PREPROCESSOR_DEFAULT         WEBRTC_AUDIOPREPROCESSOR
 #define SETTINGS_SOUND_SOUNDOUT_MUTE_LEFT           "soundsystem/sndoutput-mute-left"
 #define SETTINGS_SOUND_SOUNDOUT_MUTE_LEFT_DEFAULT   false
 #define SETTINGS_SOUND_SOUNDOUT_MUTE_RIGHT          "soundsystem/sndoutput-mute-right"
