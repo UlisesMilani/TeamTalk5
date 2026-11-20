@@ -6487,6 +6487,18 @@ You can download it on the page below:<byte value="xd"/>
         <source>Reset to Default Value</source>
         <translation>기본값으로 재설정</translation>
     </message>
+    <message>
+        <source>Audio preprocessor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>WebRTC (default)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Speex DSP</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ProfilesDlg</name>

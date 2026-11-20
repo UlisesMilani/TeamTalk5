@@ -295,6 +295,15 @@ void PreferencesDlg::initDevices()
     ui.agcBox->setChecked(ttSettings->value(SETTINGS_SOUND_AGC, SETTINGS_SOUND_AGC_DEFAULT).toBool());
     ui.denoisingBox->setChecked(ttSettings->value(SETTINGS_SOUND_DENOISING,
                                                   SETTINGS_SOUND_DENOISING_DEFAULT).toBool());
+    if (ui.preprocessorBox->count() == 0)
+    {
+        ui.preprocessorBox->addItem(tr("WebRTC (default)"), WEBRTC_AUDIOPREPROCESSOR);
+        ui.preprocessorBox->addItem(tr("Speex DSP"), SPEEXDSP_AUDIOPREPROCESSOR);
+    }
+    int preproctype = ttSettings->value(SETTINGS_SOUND_PREPROCESSOR,
+                                        SETTINGS_SOUND_PREPROCESSOR_DEFAULT).toInt();
+    int preprocindex = ui.preprocessorBox->findData(preproctype);
+    ui.preprocessorBox->setCurrentIndex(preprocindex >= 0 ? preprocindex : 0);
     slotUpdateSoundCheckBoxes();
 }
 
@@ -963,6 +972,9 @@ void PreferencesDlg::slotSaveChanges()
         ttSettings->setValueOrClear(SETTINGS_SOUND_ECHOCANCEL, ui.echocancelBox->isChecked(), SETTINGS_SOUND_ECHOCANCEL_DEFAULT);
         ttSettings->setValueOrClear(SETTINGS_SOUND_AGC, ui.agcBox->isChecked(), SETTINGS_SOUND_AGC_DEFAULT);
         ttSettings->setValueOrClear(SETTINGS_SOUND_DENOISING, ui.denoisingBox->isChecked(), SETTINGS_SOUND_DENOISING_DEFAULT);
+        ttSettings->setValueOrClear(SETTINGS_SOUND_PREPROCESSOR,
+                                    getCurrentItemData(ui.preprocessorBox, SETTINGS_SOUND_PREPROCESSOR_DEFAULT).toInt(),
+                                    SETTINGS_SOUND_PREPROCESSOR_DEFAULT);
 
         ttSettings->setValueOrClear(SETTINGS_SOUND_MEDIASTREAM_VOLUME, ui.mediavsvoiceSlider->value(), SETTINGS_SOUND_MEDIASTREAM_VOLUME_DEFAULT);
 
@@ -1305,15 +1317,29 @@ void PreferencesDlg::slotSoundTestDevices(bool checked)
             samplerate = out_dev.nDefaultSampleRate;
         int channels = 1;
 
-        AudioPreprocessor preprocessor = initDefaultAudioPreprocessor(WEBRTC_AUDIOPREPROCESSOR);
-        preprocessor.webrtc.gaincontroller2.bEnable = ui.agcBox->isChecked();
-        preprocessor.webrtc.noisesuppression.bEnable = ui.denoisingBox->isChecked();
+        AudioPreprocessorType const preproctype = static_cast<AudioPreprocessorType>(
+            getCurrentItemData(ui.preprocessorBox, WEBRTC_AUDIOPREPROCESSOR).toInt());
+        AudioPreprocessor preprocessor = initDefaultAudioPreprocessor(
+            ui.agcBox->isChecked() || ui.denoisingBox->isChecked() || ui.echocancelBox->isChecked() ?
+            preproctype : TEAMTALK_AUDIOPREPROCESSOR);
+        if (preprocessor.nPreprocessor == SPEEXDSP_AUDIOPREPROCESSOR)
+        {
+            preprocessor.speexdsp.bEnableAGC = ui.agcBox->isChecked();
+            preprocessor.speexdsp.bEnableDenoise = ui.denoisingBox->isChecked();
+            preprocessor.speexdsp.nMaxNoiseSuppressDB = -60;
+            preprocessor.speexdsp.bEnableEchoCancellation = ui.echocancelBox->isChecked() && duplex;
+        }
+        else if (preprocessor.nPreprocessor == WEBRTC_AUDIOPREPROCESSOR)
+        {
+            preprocessor.webrtc.gaincontroller2.bEnable = ui.agcBox->isChecked();
+            preprocessor.webrtc.noisesuppression.bEnable = ui.denoisingBox->isChecked();
+            preprocessor.webrtc.echocanceller.bEnable = ui.echocancelBox->isChecked() && duplex;
+        }
 
         if (!duplex && (in_dev.uSoundDeviceFeatures & SOUNDDEVICEFEATURE_AEC))
         {
             SoundDeviceEffects effects = {};
             effects.bEnableEchoCancellation = ui.echocancelBox->isChecked();
-            preprocessor.webrtc.echocanceller.bEnable = FALSE;
 
             duplex = effects.bEnableEchoCancellation && in_dev.nSoundSystem == SOUNDSYSTEM_WASAPI;
 
@@ -1326,7 +1352,6 @@ void PreferencesDlg::slotSoundTestDevices(bool checked)
         else
         {
             Q_ASSERT((ui.echocancelBox->isChecked() && duplex) || !ui.echocancelBox->isChecked());
-            preprocessor.webrtc.echocanceller.bEnable = ui.echocancelBox->isChecked();
 
             //input and output devices MUST support the specified 'samplerate' in duplex mode
             m_sndloop = TT_StartSoundLoopbackTestEx(inputid, outputid, samplerate, channels,
@@ -1363,6 +1388,7 @@ void PreferencesDlg::slotSoundDefaults()
     ui.echocancelBox->setChecked(DEFAULT_ECHO_ENABLE && echocapable);
     ui.agcBox->setChecked(DEFAULT_AGC_ENABLE);
     ui.denoisingBox->setChecked(DEFAULT_DENOISE_ENABLE);
+    ui.preprocessorBox->setCurrentIndex(ui.preprocessorBox->findData(SETTINGS_SOUND_PREPROCESSOR_DEFAULT));
     ui.mediavsvoiceSlider->setValue(SETTINGS_SOUND_MEDIASTREAM_VOLUME_DEFAULT);
 }
 

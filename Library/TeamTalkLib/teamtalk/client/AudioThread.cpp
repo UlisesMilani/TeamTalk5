@@ -310,9 +310,16 @@ bool AudioThread::UpdatePreprocess(const teamtalk::SpeexDSP& speexdsp)
 #if defined(ENABLE_SPEEXDSP)
     assert(Codec().codec != CODEC_NO_CODEC);
 
-    int const callback_samples = GetAudioCodecCbSamples(Codec());
     int const sample_rate = GetAudioCodecSampleRate(Codec());
     int const channels = GetAudioCodecChannels(Codec());
+
+    // Use 10 msec blocks when they divide the codec callback exactly.
+    // Otherwise retain the callback size (e.g. Opus 2.5, 5 or 15 msec),
+    // so every input sample is processed without padding or dropping tails.
+    int const callback_samples = GetAudioCodecCbSamples(Codec());
+    int const ten_msec_samples = sample_rate / 100;
+    int const preprocess_samples = callback_samples % ten_msec_samples == 0 ?
+        ten_msec_samples : callback_samples;
 
     if (!m_preprocess_left)
     {
@@ -321,8 +328,8 @@ bool AudioThread::UpdatePreprocess(const teamtalk::SpeexDSP& speexdsp)
             m_preprocess_left = std::make_unique<SpeexPreprocess>();
             m_preprocess_right = std::make_unique<SpeexPreprocess>();
 
-            if (!m_preprocess_left->Initialize(sample_rate, callback_samples) ||
-                !m_preprocess_right->Initialize(sample_rate, callback_samples))
+            if (!m_preprocess_left->Initialize(sample_rate, preprocess_samples) ||
+                !m_preprocess_right->Initialize(sample_rate, preprocess_samples))
             {
                 m_preprocess_left.reset();
                 m_preprocess_right.reset();
@@ -336,7 +343,7 @@ bool AudioThread::UpdatePreprocess(const teamtalk::SpeexDSP& speexdsp)
         else
         {
             m_preprocess_left = std::make_unique<SpeexPreprocess>();
-            if (!m_preprocess_left->Initialize(sample_rate, callback_samples))
+            if (!m_preprocess_left->Initialize(sample_rate, preprocess_samples))
             {
                 m_preprocess_left.reset();
                 return false;
@@ -621,20 +628,38 @@ void AudioThread::PreprocessSpeex(media::AudioFrame& audblock)
     if(!preprocess)
         return;
 
+    int const callback_samples = GetAudioCodecCbSamples(Codec());
+    int const ten_msec_samples = GetAudioCodecSampleRate(Codec()) / 100;
+    int const framesize = callback_samples % ten_msec_samples == 0 ?
+        ten_msec_samples : callback_samples;
+    assert(audblock.input_samples == callback_samples);
+    assert(audblock.input_samples % framesize == 0);
+
+    bool const echo_reference = audblock.output_buffer != nullptr &&
+        audblock.output_samples == audblock.input_samples &&
+        audblock.outputfmt.channels == audblock.inputfmt.channels;
+
     if(audblock.inputfmt.channels == 1)
     {
-        if (m_preprocess_left->IsEchoCancel() &&
-            audblock.outputfmt.channels == 1 && (audblock.output_buffer != nullptr))
-        {
-            if(m_echobuf.size() != static_cast<size_t>(audblock.input_samples))
-                m_echobuf.resize(audblock.input_samples);
+        bool const echo = m_preprocess_left->IsEchoCancel() && echo_reference;
+        if (echo)
+            m_echobuf.resize(audblock.input_samples);
 
-            m_preprocess_left->EchoCancel(audblock.input_buffer,
-                                          audblock.output_buffer,
-                                          m_echobuf.data());
-            audblock.input_buffer = m_echobuf.data();
+        for (int i = 0; i < audblock.input_samples; i += framesize)
+        {
+            short* block = audblock.input_buffer + i;
+            if (echo)
+            {
+                m_preprocess_left->EchoCancel(block, audblock.output_buffer + i,
+                                              m_echobuf.data() + i);
+                block = m_echobuf.data() + i;
+            }
+            // Process immediately after AEC: residual echo suppression uses
+            // the echo state for this block, not the end of the callback.
+            m_preprocess_left->Preprocess(block);
         }
-        m_preprocess_left->Preprocess(audblock.input_buffer); //denoise, AGC, etc
+        if (echo)
+            audblock.input_buffer = m_echobuf.data();
     }
     else if(audblock.inputfmt.channels == 2)
     {
@@ -643,29 +668,40 @@ void AudioThread::PreprocessSpeex(media::AudioFrame& audblock)
         std::vector<short> in_rightchan(audblock.input_samples);
         SplitStereo(audblock.input_buffer, audblock.input_samples, in_leftchan, in_rightchan);
 
-        if(m_preprocess_left->IsEchoCancel() && m_preprocess_right->IsEchoCancel() &&
-           audblock.outputfmt.channels == 2 && (audblock.output_buffer != nullptr))
+        bool const echo = m_preprocess_left->IsEchoCancel() &&
+            m_preprocess_right->IsEchoCancel() && echo_reference;
+        std::vector<short> out_leftchan, out_rightchan, echobuf_left, echobuf_right;
+        if (echo)
         {
-            assert(audblock.input_samples == audblock.output_samples);
-
-            std::vector<short> out_leftchan(audblock.output_samples);
-            std::vector<short> out_rightchan(audblock.output_samples);
-            std::vector<short> echobuf_left(audblock.output_samples);
-            std::vector<short> echobuf_right(audblock.output_samples);
+            out_leftchan.resize(audblock.output_samples);
+            out_rightchan.resize(audblock.output_samples);
+            echobuf_left.resize(audblock.input_samples);
+            echobuf_right.resize(audblock.input_samples);
             SplitStereo(audblock.output_buffer, audblock.output_samples,
                         out_leftchan, out_rightchan);
-
-            m_preprocess_left->EchoCancel(in_leftchan.data(), out_leftchan.data(),
-                                         echobuf_left.data());
-            in_leftchan.swap(echobuf_left);
-            m_preprocess_right->EchoCancel(in_rightchan.data(), out_rightchan.data(),
-                                         echobuf_right.data());
-            in_rightchan.swap(echobuf_right);
         }
 
-        m_preprocess_left->Preprocess(in_leftchan.data()); //denoise, AGC, etc
-        m_preprocess_right->Preprocess(in_rightchan.data()); //denoise, AGC, etc
-
+        for (int i = 0; i < audblock.input_samples; i += framesize)
+        {
+            short* left = in_leftchan.data() + i;
+            short* right = in_rightchan.data() + i;
+            if (echo)
+            {
+                m_preprocess_left->EchoCancel(left, out_leftchan.data() + i,
+                                              echobuf_left.data() + i);
+                m_preprocess_right->EchoCancel(right, out_rightchan.data() + i,
+                                               echobuf_right.data() + i);
+                left = echobuf_left.data() + i;
+                right = echobuf_right.data() + i;
+            }
+            m_preprocess_left->Preprocess(left);
+            m_preprocess_right->Preprocess(right);
+        }
+        if (echo)
+        {
+            in_leftchan.swap(echobuf_left);
+            in_rightchan.swap(echobuf_right);
+        }
         MergeStereo(in_leftchan, in_rightchan, audblock.input_buffer,
                     audblock.input_samples);
     }

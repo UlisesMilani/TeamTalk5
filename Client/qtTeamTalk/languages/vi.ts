@@ -6522,6 +6522,18 @@ Bạn có thể tải xuống từ trang bên dưới:
         <source>Reset to Default Value</source>
         <translation>Đặt lại về giá trị mặc định</translation>
     </message>
+    <message>
+        <source>Audio preprocessor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>WebRTC (default)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Speex DSP</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ProfilesDlg</name>

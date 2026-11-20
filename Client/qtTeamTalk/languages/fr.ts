@@ -6521,6 +6521,18 @@ Faut-il appliquer ces paramètres?</translation>
         <source>Reset to Default Value</source>
         <translation>Réinitialiser à la valeur par défaut</translation>
     </message>
+    <message>
+        <source>Audio preprocessor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>WebRTC (default)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Speex DSP</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ProfilesDlg</name>

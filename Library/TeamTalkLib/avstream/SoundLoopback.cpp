@@ -92,7 +92,11 @@ bool SoundLoopback::StartTest(int inputdevid, int outputdevid,
         output_samplerate = out_dev.default_samplerate;
     }
 
-    int const output_samples = CALLBACK_FRAMESIZE(output_samplerate);
+    int const output_samples =
+#if defined(ENABLE_SPEEXDSP)
+        (enable_agc || denoise || enable_aec) ? output_samplerate / 100 :
+#endif
+        CALLBACK_FRAMESIZE(output_samplerate);
 
     //adapt capture device to playback device
     int input_channels = output_channels;
@@ -118,7 +122,7 @@ bool SoundLoopback::StartTest(int inputdevid, int outputdevid,
         m_preprocess_buffer_right.resize(output_samples);
 
 #if defined(ENABLE_SPEEXDSP)
-    if(!SetAGC(samplerate, output_samples, channels,
+    if(!SetAGC(output_samplerate, output_samples, channels,
                enable_agc, agc, denoise, denoise_level, enable_aec, aec))
     {
         StopTest();
@@ -197,7 +201,11 @@ bool SoundLoopback::StartDuplexTest(int inputdevid, int outputdevid,
         return false;
 
     int const input_channels = in_dev.GetSupportedInputChannels(channels);
-    int const samples = CALLBACK_FRAMESIZE(samplerate);
+    int const samples =
+#if defined(ENABLE_SPEEXDSP)
+        (enable_agc || denoise || enable_aec) ? samplerate / 100 :
+#endif
+        CALLBACK_FRAMESIZE(samplerate);
 
     if (input_channels != channels)
     {

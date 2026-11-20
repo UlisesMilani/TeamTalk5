@@ -6479,6 +6479,18 @@ You can download it on the page below:<byte value="xd"/>
         <source>Check for beta software updates on startup</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Audio preprocessor</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>WebRTC (default)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Speex DSP</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ProfilesDlg</name>
